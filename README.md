@@ -20,3 +20,9 @@ the values of these constant variables to suit your needs.
   * Display the count on connected LEDs. Can be `true` or `false`.
 * `DISP_OLED`
   * Display the count using a connected OLED display. Can be `true` or `false`.
+
+## Associated Test Code
+You can find code for changing the MAC address of the ESP32 in the [ESP32-MacSwitch](https://github.com/damon-shaw/ESP32-MacSwitch) project.
+
+You can use the ESP32-MacSwitch code to start up a visible access point with a MAC address of
+your choice. This allows you to test your MAC filter using another ESP32 board.
