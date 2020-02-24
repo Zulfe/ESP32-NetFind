@@ -22,23 +22,44 @@ const uint8_t LED_PINS[] = {32, 33, 25};
 const uint8_t NUM_PINS = 3;
 
 /*
- * This is your MAC address filter. The code is configured to use a
- * three-part filter to match against the first three segments of
- * a device's MAC address.
+ * This is your MAC address filter. The code is configured to compare the
+ * MAC address of any found devices to the enabled segments in this filter.
+ * You can thus filter on the first segment, the first three segments, just
+ * the inner segments, or every other segment.
+ * @see APPLY_FILTER
+ * 
  * Note that MAC addresses are in hexadecimal, so each segment is really
  * an integer (between 0 and 255), not a string. When defining this filter,
  * use hexadecimal numbers by adding a '0x' before the two characters from
  * the MAC address. (e.g. 1A:2B:3C:4D:5E:6F to {0x1A, 0x2B, 0x3C, ...}).
  */
-const uint8_t MAC_FILTER[3] = {0x00, 0x0D, 0x97};
+const uint8_t MAC_FILTER[6] = {0xAC, 0xA3, 0x1E, 0x00, 0x00, 0x00};
+
+/*
+ * This is your MAC address filter segment enable. The first boolean corresponds
+ * to the first segment in the filter, the second boolean to the second segment
+ * in the filter, etc. If all are set to true, you'll be scanning for a single
+ * full MAC address.
+ * 
+ * This is pre-configured to enable filtering on the first three segments.
+ */
+const bool APPLY_FILTER[6] = {true, true, true, false, false, false};
+
+/*
+ * A constant to represent how many segments there are in a MAC address. You
+ * don't really want to change this.
+ */
+const uint8_t NUM_MAC_SEGMENTS = 6;
 
 /*
  * Flags for device count display methods. 
  * DISP_LEDS: display the count using discrete LEDs, connected to LED_PINS pins.
  * DISP_OLED: display the count using a connected OLED display.
+ * PRINT_FOUND_DEVICES: display the devices found by the WiFi scan, numbered, with RSSI.
  */
 const bool DISP_LEDS = true;
 const bool DISP_OLED = true;
+const bool PRINT_FOUND_DEVICES = true;
 
 /*
  * Definition for an attached OLED display. If the MELIFE ESP32 board from Amazon
@@ -80,6 +101,7 @@ uint16_t count_devices(const uint8_t filter[3]) {
 	// If some devices were found, filter and count them.
 	else {
 		Serial.print("Found "); Serial.print(scanResults); Serial.println(" devices.");
+		bool passes_filter = true;
 
 		// For each of the scan results...
 		for (int i = 0; i < scanResults; ++i) {
@@ -89,30 +111,37 @@ uint16_t count_devices(const uint8_t filter[3]) {
 			uint8_t* BSSID = WiFi.BSSID(i);
 			String BSSIDstr = WiFi.BSSIDstr(i);
 
-			Serial.print(i + 1);
-			Serial.print(": ");
-			Serial.print(SSID);
-			Serial.print(" - ");
-			Serial.print(BSSIDstr);
-			Serial.print(" (");
-			Serial.print(RSSI);
-			Serial.print(")");
-			Serial.println("");
-
-			// Only consider devices whose MAC address passes the provided filter.
-			if(BSSID[0] == filter[0] && BSSID[1] == filter[1] && BSSID[2] == filter[2]) {
-				// Map the BSSID (MAC address) to the measured signal strength.
-				std::map<String, int32_t>::iterator it = deviceSignalMap.find(BSSIDstr);
-				if(it != deviceSignalMap.end() && it->second != std::abs(RSSI))
-					it->second = std::abs(RSSI);
-				else
-					deviceSignalMap.insert(std::make_pair(BSSIDstr, std::abs(RSSI)));
-
-				// The device has passed the filter. Increment the number of found devices.
-				num_filtered++;
+			if(PRINT_FOUND_DEVICES) {
+				Serial.print(i + 1);
+				Serial.print(": ");
+				Serial.print(SSID);
+				Serial.print(" - ");
+				Serial.print(BSSIDstr);
+				Serial.print(" (");
+				Serial.print(RSSI);
+				Serial.print(")");
+				Serial.println("");
 			}
 
-			// delay(10);
+			passes_filter = true;
+			// Check if this device has a MAC address that passes the filter.
+			for(uint8_t i = 0; i < NUM_MAC_SEGMENTS; i++) {
+				if(APPLY_FILTER[i] && BSSID[i] != MAC_FILTER[i])
+				passes_filter = false;
+			}
+
+			// If this device passed the filter...
+			if(passes_filter) {
+				// Map the BSSID (MAC address) to the measured signal strength.
+						std::map<String, int32_t>::iterator it = deviceSignalMap.find(BSSIDstr);
+						if(it != deviceSignalMap.end() && it->second != std::abs(RSSI))
+							it->second = std::abs(RSSI);
+						else
+							deviceSignalMap.insert(std::make_pair(BSSIDstr, std::abs(RSSI)));
+
+						// The device has passed the filter. Increment the number of found devices.
+						num_filtered++;
+			}
 		}
 	}
 
